@@ -61,47 +61,60 @@ Function test()
         If IsDate(date_val) Then
             Dim curr_date As String: curr_date = getOnlyDate(date_val)
             Dim curr_hour As Integer: curr_hour = hour(date_val)
-            Dim curr_wind_speed As Double: curr_wind_speed = windSpeedValues(i, 1)
+            
+            If IsNumeric(windSpeedValues(i, 1)) Then
+                
+                Dim curr_wind_speed As Double: curr_wind_speed = windSpeedValues(i, 1)
+
             
 '            Debug.Print curr_date, curr_hour, curr_wind_speed
             
-            day_changed = DateDiff("d", curr_date, prev_date)
-            hour_changed = curr_hour <> prev_hour
-            
-            If Not hour_changed Then
-                wind_speed_sum = wind_speed_sum + curr_wind_speed
-                data_count = data_count + 1
+                day_changed = DateDiff("d", curr_date, prev_date)
+                hour_changed = curr_hour <> prev_hour
                 
-                If i = lastRow Then
-                    Debug.Print curr_wind_speed, data_count
-                    wind_speed_average = wind_speed_sum / data_count
-                    wind_speed_dict.Add new_datetime, wind_speed_average
-                    Debug.Print new_datetime, wind_speed_dict(new_datetime), i
-                    Debug.Print "Finished processing the wind speed date."
+                If Not hour_changed Then
+                    wind_speed_sum = wind_speed_sum + curr_wind_speed
+                    data_count = data_count + 1
+                    
+                    If i = lastRow Then
+                        wind_speed_average = wind_speed_sum / data_count
+                        wind_speed_dict.Add new_datetime, wind_speed_average
+                        Debug.Print new_datetime, wind_speed_dict(new_datetime), i
+                        Debug.Print "Finished processing the wind speed date."
+                    End If
+    
+                Else
+                    
+                    ' Ensure that all data receieved is not corrupted before doing average calculations
+                    If IsNumeric(wind_speed_sum) And data_count <> 0 Then
+                        wind_speed_average = wind_speed_sum / data_count
+                        wind_speed_dict.Add new_datetime, wind_speed_average
+                        
+                        Debug.Print new_datetime, wind_speed_dict(new_datetime), i
+                    Else
+                        Debug.Print "Average data is corrupted with " & wind_speed_sum & " Returning NaN!"
+                        wind_speed_dict.Add new_datetime, "NaN"
+                    End If
+
+                    ' Since now we are in the next hour, we should populate the first sum as the current wind speed value
+                    wind_speed_sum = curr_wind_speed
+                    data_count = 1
+                    new_datetime = generateNewDatetime(curr_date, curr_hour)
                 End If
-
+    
+    '            If day_changed Then
+    '                wind_speed_dict.Add new_datetime, Array(u_avg, v_avg)
+    '                new_datetime = generateNewDatetime(curr_date, curr_hour)
+    '            End If
+                
+                prev_hour = curr_hour
+                prev_date = curr_date
             Else
-                wind_speed_average = wind_speed_sum / data_count
-                wind_speed_dict.Add new_datetime, wind_speed_average
-                
-                Debug.Print new_datetime, wind_speed_dict(new_datetime), i
-                
-                ' Since now we are in the next hour, we should populate the first sum as the current wind speed value
-                wind_speed_sum = curr_wind_speed
-                data_count = 1
-                new_datetime = generateNewDatetime(curr_date, curr_hour)
+                ' Ignore and skip to the next iteration if the data is corrupted
+                Debug.Print "Data is corrupted on " & date_val & " with " & windSpeedValues(i, 1); ". Ignoring this data!"
             End If
-
-'            If day_changed Then
-'                wind_speed_dict.Add new_datetime, Array(u_avg, v_avg)
-'                new_datetime = generateNewDatetime(curr_date, curr_hour)
-'            End If
-            
-            prev_hour = curr_hour
-            prev_date = curr_date
         End If
-        
-
+    
     Next i
     
 End Function
