@@ -4,23 +4,28 @@ Function test()
     Dim ws As Worksheet
     Set ws = ThisWorkbook.Sheets("VBA Development") ' Replace "SheetName" with the actual name of your sheet
     Dim lastRow As Long
-    Dim dataRange As Range
+    Dim dateRange As Range
     Dim windSpeedRange As Range
 '    Dim vRange As Range
 
     ' Find the last row with data in column N
-    lastRow = ws.Cells(ws.Rows.Count, "N").End(xlUp).Row
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
 
     ' Set the range for the entire column N up to the last row with data
-    Set dataRange = ws.Range("N1:N" & lastRow)
-    Set windSpeedRange = ws.Range("O1:O" & lastRow)
+    Set dateRange = ws.Range("A1:A" & lastRow)
+    Set windSpeedRange = ws.Range("B1:B" & lastRow)
+    
+    Dim dateWriteCol As String: dateWriteCol = "Q"
+    Dim windSpeedAverageWriteCol As String: windSpeedAverageWriteCol = "R"
+    Range(dateWriteCol & 1) = "Date and Time"
+    Range(windSpeedAverageWriteCol & 1) = "Wind Speed Average (m/s)"
 '    Set vRange = ws.Range("P1:P" & lastRow)
     
     Dim datetimeValues As Variant
     Dim windSpeedValues As Variant
 '    Dim vCompValues As Variant
     
-    datetimeValues = dataRange.Value
+    datetimeValues = dateRange.Value
     windSpeedValues = windSpeedRange.Value
 '    vCompValues = vRange.Value
     
@@ -65,7 +70,6 @@ Function test()
             If IsNumeric(windSpeedValues(i, 1)) Then
                 
                 Dim curr_wind_speed As Double: curr_wind_speed = windSpeedValues(i, 1)
-
             
 '            Debug.Print curr_date, curr_hour, curr_wind_speed
             
@@ -79,6 +83,8 @@ Function test()
                     If i = lastRow Then
                         wind_speed_average = wind_speed_sum / data_count
                         wind_speed_dict.Add new_datetime, wind_speed_average
+                        Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(new_datetime)
+                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_speed_average
                         Debug.Print new_datetime, wind_speed_dict(new_datetime), i
                         Debug.Print "Finished processing the wind speed date."
                     End If
@@ -89,11 +95,16 @@ Function test()
                     If IsNumeric(wind_speed_sum) And data_count <> 0 Then
                         wind_speed_average = wind_speed_sum / data_count
                         wind_speed_dict.Add new_datetime, wind_speed_average
+                        Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(new_datetime)
+                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_speed_average
                         
                         Debug.Print new_datetime, wind_speed_dict(new_datetime), i
                     Else
+                        ' This condition generallly occurs if the hour interval keeps returning faulty data
                         Debug.Print "Average data is corrupted with " & wind_speed_sum & " Returning NaN!"
                         wind_speed_dict.Add new_datetime, "NaN"
+                        Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(new_datetime)
+                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_speed_average
                     End If
 
                     ' Since now we are in the next hour, we should populate the first sum as the current wind speed value
