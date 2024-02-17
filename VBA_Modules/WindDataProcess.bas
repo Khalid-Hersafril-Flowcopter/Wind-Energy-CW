@@ -65,12 +65,11 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
     Dim date_val As Date
 
     For i = 2 To datetime_len
-
-        date_val = datetimeValues(i, 1)
-
+        
         ' TODO (Khalid): Currently, there is a bug where dd/mm/yyyy 00:00:00 returns Nothing and this is not captured
         ' We can choose to ignore this value, but that'd mean for 0 hours, you'd get one less elements
-        If IsDate(date_val) Then
+        If IsDate(datetimeValues(i, 1)) Then
+            date_val = datetimeValues(i, 1)
             Dim curr_date As String: curr_date = getOnlyDate(date_val)
             Dim curr_hour As Integer: curr_hour = hour(date_val)
             
@@ -85,7 +84,7 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
                     wind_speed_sum = wind_speed_sum + curr_wind_speed
                     data_count = data_count + 1
                     
-                    If i = lastRow Then
+                    If i = datetime_len Then
                         wind_speed_average = wind_speed_sum / data_count
                         wind_speed_dict.Add new_datetime, wind_speed_average
                         Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(new_datetime)
@@ -109,7 +108,7 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
                         Debug.Print "Average data is corrupted with " & wind_speed_sum & " Returning NaN!"
                         wind_speed_dict.Add new_datetime, "NaN"
                         Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(new_datetime)
-                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_speed_average
+                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
                     End If
 
                     ' Since now we are in the next hour, we should populate the first sum as the current wind speed value
