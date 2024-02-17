@@ -47,7 +47,7 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
     ' Initialize the new datetime with the first date available from the range
     Dim curr_datetime As Date: curr_datetime = datetimeValues(2, 1)
     Dim init_date As String: init_date = getOnlyDate(curr_datetime)
-    Dim init_hour_int As Integer: init_hour_int = 0
+    Dim init_hour_int As Integer: init_hour_int = hour(curr_datetime)
     Dim new_datetime As String: new_datetime = generateNewDatetime(init_date, init_hour_int)
     
     ' Initialize control variable for checking change in conditions
@@ -63,7 +63,10 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
 
     Dim i As Long
     Dim date_val As Date
-    Dim prev_date_val As Date: prev_date_val = datetimeValues(2, 1)
+    ' Cheating here a bit, but this should depend on the data interval!
+    Dim prev_date_val As Date: prev_date_val = DateAdd("n", -10, datetimeValues(2, 1))
+    Dim interval As Long: interval = 1
+    Dim hour_increment As Double: hour_increment = 0
 
     For i = 2 To datetime_len
         
@@ -74,89 +77,142 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
             Dim curr_date As String: curr_date = getOnlyDate(date_val)
             Dim curr_hour As Integer: curr_hour = hour(date_val)
             
-            If IsNumeric(windSpeedValues(i, 1)) Then
-                
-                Dim curr_wind_speed As Double: curr_wind_speed = windSpeedValues(i, 1)
+            ' New implementation
+            Dim hours_diff As Double: hours_diff = hoursDifference(CDate(prev_date_val), CDate(date_val))
+            hour_changed = hour(prev_date_val) <> hour(date_val)
             
-                day_changed = DateDiff("d", curr_date, prev_date)
-                hour_changed = curr_hour <> prev_hour
+            If Not hour_changed Then
                 
-                If Not hour_changed Then
-                    wind_speed_sum = wind_speed_sum + curr_wind_speed
+                ' If the hours difference is larger than the set interval, then the average should be calculated and write to sheet
+                Dim curr_wind_speed As Double
+                If IsNumeric(windSpeedValues(i, 1)) Then
+                    curr_wind_speed = windSpeedValues(i, 1)
                     data_count = data_count + 1
-                    
-                    If i = datetime_len Then
-                        wind_speed_average = wind_speed_sum / data_count
-                        wind_speed_dict.Add new_datetime, wind_speed_average
-                        Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(new_datetime)
-                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_speed_average
-                        Debug.Print new_datetime, wind_speed_dict(new_datetime), i
-                        Debug.Print "Finished processing the wind speed date."
-                    End If
-    
                 Else
-                    
-                    ' Ensure that all data receieved is not corrupted before doing average calculations
-                    If IsNumeric(wind_speed_sum) And data_count <> 0 Then
-                        wind_speed_average = wind_speed_sum / data_count
-                        wind_speed_dict.Add new_datetime, wind_speed_average
-                        Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(new_datetime)
-                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_speed_average
-                        
-                        Debug.Print new_datetime, wind_speed_dict(new_datetime), i
-                    Else
-                        ' This condition generallly occurs if the hour interval keeps returning faulty data
-                        Debug.Print "Average data is corrupted with " & wind_speed_sum & " Returning NaN!"
-                        wind_speed_dict.Add new_datetime, "NaN"
-                        Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(new_datetime)
-                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
-                    End If
-                    
-'                    Dim missing_hours As Long: missing_hours = curr_hour - prev_hour
-'
-'                    Dim missing_hours As Long: missing_hours = HoursDifference(CDate(curr_date), CDate(prev_date))
-'
-'                    ' Handles missing datetime. This is to ensure that the data length is equal to each other
-'                    ' which is extremely important when performing correlation
-'                    If missing_hours > 1 Then
-'                        For n = 1 To missing_hours - 1
-'                            Dim missing_datetime As Date: missing_datetime = generateNewDatetime(curr_date, prev_hour + n)
-'                            wind_speed_dict.Add missing_datetime, "NaN"
-'                            Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(missing_datetime)
-'                            Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
-'                        Next n
-'                    End If
-                    
-                    Dim hours_diff As Double: hours_diff = hoursDifference(CDate(prev_date_val), CDate(date_val))
-                    
-                    Debug.Print "Difference in hours: " & hours_diff
-                    
-                    ' Loop through dates from StartDate to EndDate with 1-hour increments
-                    Do While Round(hours_diff, 0) > 1
-                        ' Increment CurrentDate by 1 hour
-                        prev_date_val = DateAdd("h", 1, prev_date_val)
-                        ' Print each hour in 24-hour format
-                        Debug.Print Format(prev_date_val, "dd/mm/yyyy HH:mm:ss")
-                        
-                        wind_speed_dict.Add prev_date_val, "NaN"
-                        Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(prev_date_val)
-                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
-                        hours_diff = hours_diff - 1
-                        
-                    Loop
-
-                    ' Since now we are in the next hour, we should populate the first sum as the current wind speed value
-                    wind_speed_sum = curr_wind_speed
-                    data_count = 1
-                    new_datetime = generateNewDatetime(curr_date, curr_hour)
+                    ' If the wind speed value is not a number (e.g. NaN), then force the current wind speed to be 0
+                    ' Data count should not be incremented to avoid false averaging
+                    Debug.Print "Data is corrupted on " & date_val & " with " & windSpeedValues(i, 1); ". Ignoring this data!"
+                    curr_wind_speed = 0
                 End If
-          
-                prev_hour = curr_hour
-                prev_date = curr_date
+                
+                wind_speed_sum = wind_speed_sum + curr_wind_speed
+                
+                ' Currently broken
+                hour_increment = hour_increment + hours_diff
             Else
-                ' Ignore and skip to the next iteration if the data is corrupted
-                Debug.Print "Data is corrupted on " & date_val & " with " & windSpeedValues(i, 1); ". Ignoring this data!"
+                
+                ' Get the correct datetime for the intervals
+                ' Previous datetime has been used since the current datetime where the cursor is at, is actually ahead
+                ' in the next hour
+                Dim interval_datetime As Date: interval_datetime = generateNewDatetime(getOnlyDate(prev_date_val), hour(prev_date_val))
+                
+                If wind_speed_sum > 0 And data_count <> 0 Then
+                    ' Determine the average of the wind speed during those intervals
+                    Dim wind_speed_average As Double: wind_speed_average = wind_speed_sum / data_count
+                    wind_speed_dict.Add interval_datetime, wind_speed_average
+                    Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
+                    Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_speed_average
+                Else
+                    'Handles data where the cells keep returning non-numeric values (e.g. NaN)
+                    wind_speed_dict.Add interval_datetime, "NaN"
+                    Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
+                    Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                End If
+                
+                ' This fills in gaps where there are missing intervals
+                ' For now, it is hardcoded to fill in hourly gap
+                Do While Round(hours_diff, 0) > 1
+                    ' Increment CurrentDate by 1 hour
+                    prev_date_val = DateAdd("h", 1, prev_date_val)
+                    ' Print each hour in 24-hour format
+                    Debug.Print "Data missing for " & Format(prev_date_val, "dd/mm/yyyy HH:mm:ss")
+                    interval_datetime = generateNewDatetime(getOnlyDate(prev_date_val), hour(prev_date_val))
+                    
+                    wind_speed_dict.Add interval_datetime, "NaN"
+                    Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
+                    Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                    hours_diff = hours_diff - 1
+                Loop
+                
+                If IsNumeric(windSpeedValues(i, 1)) Then
+                    wind_speed_sum = windSpeedValues(i, 1)
+                    data_count = 1
+                Else
+                    wind_speed_sum = 0
+                    data_count = 0
+                End If
+                
+                hour_increment = 0
+ 
             End If
+            
+'            If IsNumeric(windSpeedValues(i, 1)) Then
+'
+'                Dim curr_wind_speed As Double: curr_wind_speed = windSpeedValues(i, 1)
+'
+'                day_changed = DateDiff("d", curr_date, prev_date)
+'                hour_changed = curr_hour <> prev_hour
+'
+'                If Not hour_changed Then
+'                    wind_speed_sum = wind_speed_sum + curr_wind_speed
+'                    data_count = data_count + 1
+'
+'                    If i = datetime_len Then
+'                        wind_speed_average = wind_speed_sum / data_count
+'                        wind_speed_dict.Add new_datetime, wind_speed_average
+'                        Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(new_datetime)
+'                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_speed_average
+'                        Debug.Print new_datetime, wind_speed_dict(new_datetime), i
+'                        Debug.Print "Finished processing the wind speed date."
+'                    End If
+'
+'                Else
+'
+'                    ' Ensure that all data receieved is not corrupted before doing average calculations
+'                    If IsNumeric(wind_speed_sum) And data_count <> 0 Then
+'                        wind_speed_average = wind_speed_sum / data_count
+'                        wind_speed_dict.Add new_datetime, wind_speed_average
+'                        Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(new_datetime)
+'                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_speed_average
+'
+'                        Debug.Print new_datetime, wind_speed_dict(new_datetime), i
+'                    Else
+'                        ' This condition generallly occurs if the hour interval keeps returning faulty data
+'                        Debug.Print "Average data is corrupted with " & wind_speed_sum & " Returning NaN!"
+'                        wind_speed_dict.Add new_datetime, "NaN"
+'                        Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(new_datetime)
+'                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
+'                    End If
+'
+'                    Dim hours_diff As Double: hours_diff = hoursDifference(CDate(prev_date_val), CDate(date_val))
+'
+'                    Debug.Print "Difference in hours: " & hours_diff
+'
+'                    ' Loop through dates from StartDate to EndDate with 1-hour increments
+'                    Do While Round(hours_diff, 0) > 1
+'                        ' Increment CurrentDate by 1 hour
+'                        prev_date_val = DateAdd("h", 1, prev_date_val)
+'                        ' Print each hour in 24-hour format
+'                        Debug.Print Format(prev_date_val, "dd/mm/yyyy HH:mm:ss")
+'
+'                        wind_speed_dict.Add prev_date_val, "NaN"
+'                        Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(prev_date_val)
+'                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
+'                        hours_diff = hours_diff - 1
+'                    Loop
+'
+'                    ' Since now we are in the next hour, we should populate the first sum as the current wind speed value
+'                    wind_speed_sum = curr_wind_speed
+'                    data_count = 1
+'                    new_datetime = generateNewDatetime(curr_date, curr_hour)
+'                End If
+'
+'                prev_hour = curr_hour
+'                prev_date = curr_date
+'            Else
+'                ' Ignore and skip to the next iteration if the data is corrupted
+'                Debug.Print "Data is corrupted on " & date_val & " with " & windSpeedValues(i, 1); ". Ignoring this data!"
+'            End If
             
             prev_date_val = date_val
         End If
