@@ -63,6 +63,7 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
 
     Dim i As Long
     Dim date_val As Date
+    Dim prev_date_val As Date: prev_date_val = datetimeValues(2, 1)
 
     For i = 2 To datetime_len
         
@@ -110,6 +111,39 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
                         Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(new_datetime)
                         Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
                     End If
+                    
+'                    Dim missing_hours As Long: missing_hours = curr_hour - prev_hour
+'
+'                    Dim missing_hours As Long: missing_hours = HoursDifference(CDate(curr_date), CDate(prev_date))
+'
+'                    ' Handles missing datetime. This is to ensure that the data length is equal to each other
+'                    ' which is extremely important when performing correlation
+'                    If missing_hours > 1 Then
+'                        For n = 1 To missing_hours - 1
+'                            Dim missing_datetime As Date: missing_datetime = generateNewDatetime(curr_date, prev_hour + n)
+'                            wind_speed_dict.Add missing_datetime, "NaN"
+'                            Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(missing_datetime)
+'                            Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
+'                        Next n
+'                    End If
+                    
+                    Dim hours_diff As Double: hours_diff = hoursDifference(CDate(prev_date_val), CDate(date_val))
+                    
+                    Debug.Print "Difference in hours: " & hours_diff
+                    
+                    ' Loop through dates from StartDate to EndDate with 1-hour increments
+                    Do While Round(hours_diff, 0) > 1
+                        ' Increment CurrentDate by 1 hour
+                        prev_date_val = DateAdd("h", 1, prev_date_val)
+                        ' Print each hour in 24-hour format
+                        Debug.Print Format(prev_date_val, "dd/mm/yyyy HH:mm:ss")
+                        
+                        wind_speed_dict.Add prev_date_val, "NaN"
+                        Range(dateWriteCol & wind_speed_dict.Count + 1) = CDate(prev_date_val)
+                        Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                        hours_diff = hours_diff - 1
+                        
+                    Loop
 
                     ' Since now we are in the next hour, we should populate the first sum as the current wind speed value
                     wind_speed_sum = curr_wind_speed
@@ -123,6 +157,8 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
                 ' Ignore and skip to the next iteration if the data is corrupted
                 Debug.Print "Data is corrupted on " & date_val & " with " & windSpeedValues(i, 1); ". Ignoring this data!"
             End If
+            
+            prev_date_val = date_val
         End If
     
     Next i
@@ -162,11 +198,15 @@ Private Function generateNewDatetime(curr_date As String, hour_int As Integer)
     If hour_int = 0 Then
         time_str = "00" & ":" & "00:00"
         new_datetime_fmt = curr_date & " " & time_str
-        generateNewDatetime = new_datetime_fmt
     Else
         time_str = hour_int & ":" & "00:00"
         new_datetime_fmt = curr_date & " " & time_str
-        generateNewDatetime = CDate(new_datetime_fmt)
     End If
+    
+    generateNewDatetime = CDate(new_datetime_fmt)
+End Function
+
+Function hoursDifference(StartDate As Date, EndDate As Date) As Double
+    hoursDifference = (EndDate - StartDate) * 24
 End Function
 
