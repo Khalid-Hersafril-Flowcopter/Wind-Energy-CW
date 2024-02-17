@@ -15,21 +15,21 @@ Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 Private Sub SetInformationValue_Click()
     Dim datetime_selected_range As Range
-    Dim u_comp_selected_range As Range
-    Dim v_comp_selected_range As Range
-    Dim target_col_selected_range As Range
+    Dim wind_speed_selected_range As Range
+    Dim new_datetime_selected_range As Range
+    Dim wind_speed_average_selected_range As Range
     
     On Error Resume Next ' In case the Value in RefEdit is not a valid range
     Set datetime_selected_range = Range(DatetimeData.Value)
-    Set u_comp_selected_range = Range(uCompData.Value)
-    Set v_comp_selected_range = Range(vCompData.Value)
-    Set target_col_selected_range = Range(targetColData.Value)
+    Set wind_speed_selected_range = Range(targetColData.Value)
+    Set new_datetime_selected_range = Range(newDatetimeData.Value)
+    Set wind_speed_average_selected_range = Range(avgWindSpeedData.Value)
     On Error GoTo 0 ' Stop error handling
     
     ' TODO (Khalid): Validate each data
     If Not datetime_selected_range Is Nothing Then
         ' Call the function and pass the selected range to it
-            process_selected_range datetime_selected_range, u_comp_selected_range, v_comp_selected_range, target_col_selected_range
+            process_selected_range datetime_selected_range, wind_speed_selected_range, new_datetime_selected_range, wind_speed_average_selected_range
     Else
         MsgBox "The selected range is not valid."
     End If
