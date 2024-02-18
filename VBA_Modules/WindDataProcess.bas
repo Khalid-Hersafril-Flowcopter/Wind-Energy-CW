@@ -1,45 +1,44 @@
 Attribute VB_Name = "WindDataProcess"
-Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windSpeedRange As Range, ByRef newDatetimeRange As Range, ByRef windSpeedAvgRange As Range)
+Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windSpeedRange As Range, ByRef windSpeedDirectionRange As Range, ByRef newDatetimeRange As Range, ByRef windSpeedAvgRange As Range)
     ' Process the range however you need
     ' For example, just print out the address to the Immediate Window
     Debug.Print datetimeRange.Address
     Debug.Print windSpeedRange.Address
+    Debug.Print windSpeedDirectionRange.Address
     Debug.Print newDatetimeRange.Address
     Debug.Print windSpeedAvgRange.Address
-
+    
     Dim datetimeValues As Variant: datetimeValues = datetimeRange.Value
     Dim windSpeedValues As Variant: windSpeedValues = windSpeedRange.Value
+    Dim windSpeedDirValues As Variant: windSpeedDirValues = windSpeedDirectionRange.Value
 
     ' Get header name
     ' It is assumed that the header is at the first row of the column
     Dim datetime_header As String: datetime_header = datetimeValues(1, 1)
     Dim wind_speed_header As String: wind_speed_header = windSpeedValues(1, 1)
+    Dim wind_speed_dir_header As String: wind_speed_dir_header = windSpeedDirValues(1, 1)
     
     ' Get the column letter for where to write the data
     Dim datetimeCol As String: datetimeCol = getColumnLetter(datetimeRange.Address)
     Dim windSpeedCol As String: windSpeedCol = getColumnLetter(windSpeedRange.Address)
-    
-    ' Find the last row with data in column N
-'    lastRow = ws.Cells(ws.Rows.Count, datetimeCol).End(xlUp).Row
-    
-'    Dim lastUsedRow As Long
-'    With datetimeRange
-'        ' Find the last row with data starting from the bottom of the selected column range
-'        lastUsedRow = .Cells(.Rows.Count, 1).End(xlUp).Row - .Row + 1
-'    End With
+    Dim windSpeedDirCol As String: windSpeedDirCol = getColumnLetter(windSpeedDirectionRange.Address)
     
     Dim datetime_len As Long: datetime_len = getRowLen(datetimeRange)
     Dim wind_speed_len As Long: wind_speed_len = getRowLen(windSpeedRange)
+    Dim wind_speed_dir_len As Long: wind_speed_dir_len = getRowLen(windSpeedDirectionRange)
     
-    Debug.Print "Data length: " & datetime_len & ", " & wind_speed_len
+    Debug.Print "Data length: " & datetime_len & ", " & wind_speed_len, ", " & wind_speed_dir_len
     
     ' Get the column letter for where to write the data
     Dim dateWriteCol As String: dateWriteCol = getColumnLetter(newDatetimeRange.Address)
     Dim windSpeedAverageWriteCol As String: windSpeedAverageWriteCol = getColumnLetter(windSpeedAvgRange.Address)
+    Dim windSpeedDirColNum As Double: windSpeedDirColNum = colLetterToNumber(windSpeedAverageWriteCol) + 1
+    Dim windSpeedDirWriteCol As String: windSpeedDirWriteCol = colNumberToLetter(windSpeedDirColNum)
     
     ' Write the header for the new generated data
     Range(dateWriteCol & 1) = "Date and Time"
     Range(windSpeedAverageWriteCol & 1) = "Wind Speed Average (m/s)"
+    Range(windSpeedDirWriteCol & 1) = "Wind Speed Direction (degree)"
     
     Dim wind_speed_dict As Object
     Set wind_speed_dict = CreateObject("Scripting.Dictionary")
@@ -59,6 +58,8 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
     ' Initialize variables required for data processing
     Dim hour_key As Integer
     Dim wind_speed_sum As Double: wind_speed_sum = 0
+    Dim u_sum As Double: u_sum = 0
+    Dim v_sum As Double: v_sum = 0
     Dim data_count As Integer: data_count = 0
 
     Dim i As Long
@@ -67,6 +68,15 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
     Dim prev_date_val As Date: prev_date_val = DateAdd("n", -10, datetimeValues(2, 1))
     Dim interval As Long: interval = 1
     Dim hour_increment As Double: hour_increment = 0
+    
+    Dim pi As Double
+    pi = Application.WorksheetFunction.pi()
+    
+    Dim curr_wind_dir_rad As Double
+    Dim u_comp_vel As Double
+    Dim v_comp_vel As Double
+    Dim curr_wind_speed As Double
+    Dim curr_wind_dir As Double
 
     For i = 2 To datetime_len
         
@@ -84,17 +94,26 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
             If Not hour_changed Then
                 
                 ' If the hours difference is larger than the set interval, then the average should be calculated and write to sheet
-                Dim curr_wind_speed As Double
-                If IsNumeric(windSpeedValues(i, 1)) Then
+                If IsNumeric(windSpeedValues(i, 1)) And IsNumeric(windSpeedDirValues(i, 1)) Then
                     curr_wind_speed = windSpeedValues(i, 1)
+                    curr_wind_dir = windSpeedDirValues(i, 1)
                     data_count = data_count + 1
                 Else
                     ' If the wind speed value is not a number (e.g. NaN), then force the current wind speed to be 0
                     ' Data count should not be incremented to avoid false averaging
                     Debug.Print "Data is corrupted on " & date_val & " with " & windSpeedValues(i, 1); ". Ignoring this data!"
                     curr_wind_speed = 0
+                    curr_wind_dir = 0
                 End If
                 
+                ' Get the average based on the wind speed direction
+                curr_wind_dir_rad = degToRad(curr_wind_dir)
+                u_comp_vel = -1 * curr_wind_speed * Sin(curr_wind_dir_rad)
+                v_comp_vel = -1 * curr_wind_speed * Cos(curr_wind_dir_rad)
+                u_sum = u_sum + u_comp_vel
+                v_sum = v_sum + v_comp_vel
+                
+                ' Will soon be deprecated
                 wind_speed_sum = wind_speed_sum + curr_wind_speed
                 
                 ' Currently broken
@@ -108,15 +127,22 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
                 
                 If wind_speed_sum > 0 And data_count <> 0 Then
                     ' Determine the average of the wind speed during those intervals
-                    Dim wind_speed_average As Double: wind_speed_average = wind_speed_sum / data_count
-                    wind_speed_dict.Add interval_datetime, wind_speed_average
+                    ' Dim wind_speed_average As Double: wind_speed_average = wind_speed_sum / data_count
+                    Dim u_avg As Double: u_avg = u_sum / data_count
+                    Dim v_avg As Double: v_avg = v_sum / data_count
+                    Dim wind_comp As Double: wind_comp = Sqr(u_avg ^ 2 + v_avg ^ 2)
+                    Dim wind_dir_deg As Double: wind_dir_deg = radToDeg(Application.WorksheetFunction.Atan2(v_avg, u_avg)) + 180
+                    wind_speed_dict.Add interval_datetime, Array(wind_comp, u_avg, v_avg)
                     Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
-                    Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_speed_average
+                    Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_comp
+                    Range(windSpeedDirWriteCol & wind_speed_dict.Count + 1) = wind_dir_deg
+                    
                 Else
                     'Handles data where the cells keep returning non-numeric values (e.g. NaN)
                     wind_speed_dict.Add interval_datetime, "NaN"
                     Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
                     Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                    Range(windSpeedDirWriteCol & wind_speed_dict.Count + 1) = "NaN"
                 End If
                 
                 ' This fills in gaps where there are missing intervals
@@ -131,14 +157,24 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
                     wind_speed_dict.Add interval_datetime, "NaN"
                     Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
                     Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                    Range(windSpeedDirWriteCol & wind_speed_dict.Count + 1) = "NaN"
                     hours_diff = hours_diff - 1
                 Loop
                 
                 If IsNumeric(windSpeedValues(i, 1)) Then
-                    wind_speed_sum = windSpeedValues(i, 1)
+                    curr_wind_speed = windSpeedValues(i, 1)
+                    curr_wind_dir = windSpeedDirValues(i, 1)
+                    curr_wind_dir_rad = degToRad(curr_wind_dir)
+                    u_comp_vel = -1 * curr_wind_speed * Sin(curr_wind_dir_rad)
+                    v_comp_vel = -1 * curr_wind_speed * Cos(curr_wind_dir_rad)
+                    u_sum = u_comp_vel
+                    v_sum = v_comp_vel
+                    wind_speed_sum = curr_wind_speed
                     data_count = 1
                 Else
                     wind_speed_sum = 0
+                    u_sum = 0
+                    v_sum = 0
                     data_count = 0
                 End If
                 
@@ -197,4 +233,26 @@ End Function
 Function hoursDifference(StartDate As Date, EndDate As Date) As Double
     hoursDifference = (EndDate - StartDate) * 24
 End Function
+
+Private Function colLetterToNumber(col_letter As String) As Double
+    colLetterToNumber = Range(col_letter & 1).Column
+End Function
+
+Private Function colNumberToLetter(col_number As Double) As String
+    colNumberToLetter = Split(Cells(, col_number).Address, "$")(1)
+End Function
+
+Private Function degToRad(angle_deg As Double) As Double
+    degToRad = Application.WorksheetFunction.Radians(angle_deg)
+End Function
+
+Private Function radToDeg(angle_rad As Double) As Double
+    radToDeg = Application.WorksheetFunction.Degrees(angle_rad)
+End Function
+
+Private Function wtf(x As Double, y As Double) As Double
+    wtf = Application.WorksheetFunction.Atan2(x, y)
+End Function
+
+
 
