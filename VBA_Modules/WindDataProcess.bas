@@ -1,6 +1,7 @@
 Attribute VB_Name = "WindDataProcess"
 Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windSpeedRange As Range, ByRef windSpeedDirectionRange As Range, _
-                                        ByRef newDatetimeRange As Range, ByRef windSpeedAvgRange As Range, ByRef type_selection As String)
+                                        ByRef newDatetimeRange As Range, ByRef windSpeedAvgRange As Range, ByRef type_selection As String, _
+                                        ByRef write_uv_flag As Boolean)
     ' Process the range however you need
     ' For example, just print out the address to the Immediate Window
     Debug.Print datetimeRange.Address
@@ -9,6 +10,7 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
     Debug.Print newDatetimeRange.Address
     Debug.Print windSpeedAvgRange.Address
     Debug.Print type_selection
+    Debug.Print write_uv_flag
     
     Dim datetimeValues As Variant: datetimeValues = datetimeRange.Value
     Dim windSpeedValues As Variant: windSpeedValues = windSpeedRange.Value
@@ -36,11 +38,18 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
     Dim windSpeedAverageWriteCol As String: windSpeedAverageWriteCol = getColumnLetter(windSpeedAvgRange.Address)
     Dim windSpeedDirColNum As Double: windSpeedDirColNum = colLetterToNumber(windSpeedAverageWriteCol) + 1
     Dim windSpeedDirWriteCol As String: windSpeedDirWriteCol = colNumberToLetter(windSpeedDirColNum)
+    Dim uCompWriteCol As String: uCompWriteCol = colNumberToLetter(colLetterToNumber(windSpeedAverageWriteCol) + 2)
+    Dim vCompWriteCol As String: vCompWriteCol = colNumberToLetter(colLetterToNumber(windSpeedAverageWriteCol) + 3)
     
     ' Write the header for the new generated data
     Range(dateWriteCol & 1) = "Date and Time"
     Range(windSpeedAverageWriteCol & 1) = "Wind Speed Average (m/s)"
     Range(windSpeedDirWriteCol & 1) = "Wind Speed Direction (degree)"
+    
+    If write_uv_flag Then
+        Range(uCompWriteCol & 1) = "u (m/s)"
+        Range(vCompWriteCol & 1) = "v (m/s)"
+    End If
     
     Dim wind_speed_dict As Object
     Set wind_speed_dict = CreateObject("Scripting.Dictionary")
@@ -151,12 +160,21 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
                    Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_comp
                    Range(windSpeedDirWriteCol & wind_speed_dict.Count + 1) = wind_dir_deg
                    
+                   If write_uv_flag Then
+                        Range(uCompWriteCol & wind_speed_dict.Count + 1) = u_avg
+                        Range(vCompWriteCol & wind_speed_dict.Count + 1) = v_avg
+                   End If
+                   
                Else
                    'Handles data where the cells keep returning non-numeric values (e.g. NaN)
                    wind_speed_dict.Add interval_datetime, "NaN"
                    Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
                    Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
                    Range(windSpeedDirWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                   If write_uv_flag Then
+                        Range(uCompWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                        Range(vCompWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                   End If
                End If
                
                 Dim interval_diff As Double
@@ -196,6 +214,10 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
                    Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
                    Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
                    Range(windSpeedDirWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                   If write_uv_flag Then
+                        Range(uCompWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                        Range(vCompWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                   End If
                    interval_diff = interval_diff - 1
                Loop
                
