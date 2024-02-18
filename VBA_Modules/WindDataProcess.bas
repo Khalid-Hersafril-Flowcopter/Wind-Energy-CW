@@ -1,5 +1,6 @@
 Attribute VB_Name = "WindDataProcess"
-Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windSpeedRange As Range, ByRef windSpeedDirectionRange As Range, ByRef newDatetimeRange As Range, ByRef windSpeedAvgRange As Range)
+Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windSpeedRange As Range, ByRef windSpeedDirectionRange As Range, _
+                                        ByRef newDatetimeRange As Range, ByRef windSpeedAvgRange As Range, ByRef type_selection As String)
     ' Process the range however you need
     ' For example, just print out the address to the Immediate Window
     Debug.Print datetimeRange.Address
@@ -7,6 +8,7 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
     Debug.Print windSpeedDirectionRange.Address
     Debug.Print newDatetimeRange.Address
     Debug.Print windSpeedAvgRange.Address
+    Debug.Print type_selection
     
     Dim datetimeValues As Variant: datetimeValues = datetimeRange.Value
     Dim windSpeedValues As Variant: windSpeedValues = windSpeedRange.Value
@@ -89,98 +91,136 @@ Public Function process_selected_range(ByRef datetimeRange As Range, ByRef windS
             
             ' New implementation
             Dim hours_diff As Double: hours_diff = hoursDifference(CDate(prev_date_val), CDate(date_val))
+            Dim days_diff As Double: days_diff = daysDifference(CDate(prev_date_val), CDate(date_val))
             hour_changed = hour(prev_date_val) <> hour(date_val)
+            day_changed = Day(prev_date_val) <> Day(date_val)
             
-            If Not hour_changed Then
-                
-                ' If the hours difference is larger than the set interval, then the average should be calculated and write to sheet
-                If IsNumeric(windSpeedValues(i, 1)) And IsNumeric(windSpeedDirValues(i, 1)) Then
-                    curr_wind_speed = windSpeedValues(i, 1)
-                    curr_wind_dir = windSpeedDirValues(i, 1)
-                    data_count = data_count + 1
-                Else
-                    ' If the wind speed value is not a number (e.g. NaN), then force the current wind speed to be 0
-                    ' Data count should not be incremented to avoid false averaging
-                    Debug.Print "Data is corrupted on " & date_val & " with " & windSpeedValues(i, 1); ". Ignoring this data!"
-                    curr_wind_speed = 0
-                    curr_wind_dir = 0
-                End If
-                
-                ' Get the average based on the wind speed direction
-                curr_wind_dir_rad = degToRad(curr_wind_dir)
-                u_comp_vel = -1 * curr_wind_speed * Sin(curr_wind_dir_rad)
-                v_comp_vel = -1 * curr_wind_speed * Cos(curr_wind_dir_rad)
-                u_sum = u_sum + u_comp_vel
-                v_sum = v_sum + v_comp_vel
-                
-                ' Will soon be deprecated
-                wind_speed_sum = wind_speed_sum + curr_wind_speed
-                
-                ' Currently broken
-                hour_increment = hour_increment + hours_diff
+            Dim changed As Boolean
+            If type_selection = "Hourly" Then
+                changed = hour_changed
+            ElseIf type_selection = "Daily" Then
+                changed = day_changed
             Else
-                
-                ' Get the correct datetime for the intervals
-                ' Previous datetime has been used since the current datetime where the cursor is at, is actually ahead
-                ' in the next hour
-                Dim interval_datetime As Date: interval_datetime = generateNewDatetime(getOnlyDate(prev_date_val), hour(prev_date_val))
-                
-                If wind_speed_sum > 0 And data_count <> 0 Then
-                    ' Determine the average of the wind speed during those intervals
-                    ' Dim wind_speed_average As Double: wind_speed_average = wind_speed_sum / data_count
-                    Dim u_avg As Double: u_avg = u_sum / data_count
-                    Dim v_avg As Double: v_avg = v_sum / data_count
-                    Dim wind_comp As Double: wind_comp = Sqr(u_avg ^ 2 + v_avg ^ 2)
-                    Dim wind_dir_deg As Double: wind_dir_deg = radToDeg(Application.WorksheetFunction.Atan2(v_avg, u_avg)) + 180
-                    wind_speed_dict.Add interval_datetime, Array(wind_comp, u_avg, v_avg)
-                    Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
-                    Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_comp
-                    Range(windSpeedDirWriteCol & wind_speed_dict.Count + 1) = wind_dir_deg
-                    
-                Else
-                    'Handles data where the cells keep returning non-numeric values (e.g. NaN)
-                    wind_speed_dict.Add interval_datetime, "NaN"
-                    Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
-                    Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
-                    Range(windSpeedDirWriteCol & wind_speed_dict.Count + 1) = "NaN"
-                End If
-                
-                ' This fills in gaps where there are missing intervals
-                ' For now, it is hardcoded to fill in hourly gap
-                Do While Round(hours_diff, 0) > 1
-                    ' Increment CurrentDate by 1 hour
-                    prev_date_val = DateAdd("h", 1, prev_date_val)
-                    ' Print each hour in 24-hour format
-                    Debug.Print "Data missing for " & Format(prev_date_val, "dd/mm/yyyy HH:mm:ss")
-                    interval_datetime = generateNewDatetime(getOnlyDate(prev_date_val), hour(prev_date_val))
-                    
-                    wind_speed_dict.Add interval_datetime, "NaN"
-                    Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
-                    Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
-                    Range(windSpeedDirWriteCol & wind_speed_dict.Count + 1) = "NaN"
-                    hours_diff = hours_diff - 1
-                Loop
-                
-                If IsNumeric(windSpeedValues(i, 1)) Then
-                    curr_wind_speed = windSpeedValues(i, 1)
-                    curr_wind_dir = windSpeedDirValues(i, 1)
-                    curr_wind_dir_rad = degToRad(curr_wind_dir)
-                    u_comp_vel = -1 * curr_wind_speed * Sin(curr_wind_dir_rad)
-                    v_comp_vel = -1 * curr_wind_speed * Cos(curr_wind_dir_rad)
-                    u_sum = u_comp_vel
-                    v_sum = v_comp_vel
-                    wind_speed_sum = curr_wind_speed
-                    data_count = 1
-                Else
-                    wind_speed_sum = 0
-                    u_sum = 0
-                    v_sum = 0
-                    data_count = 0
-                End If
-                
-                hour_increment = 0
- 
+                Debug.Print "Error in choosing the type selection, setting hourly as default"
+                changed = hour_changed
             End If
+        
+           If Not changed Then
+               
+               ' If the hours difference is larger than the set interval, then the average should be calculated and write to sheet
+               If IsNumeric(windSpeedValues(i, 1)) And IsNumeric(windSpeedDirValues(i, 1)) Then
+                   curr_wind_speed = windSpeedValues(i, 1)
+                   curr_wind_dir = windSpeedDirValues(i, 1)
+                   data_count = data_count + 1
+               Else
+                   ' If the wind speed value is not a number (e.g. NaN), then force the current wind speed to be 0
+                   ' Data count should not be incremented to avoid false averaging
+                   Debug.Print "Data is corrupted on " & date_val & " with " & windSpeedValues(i, 1); ". Ignoring this data!"
+                   curr_wind_speed = 0
+                   curr_wind_dir = 0
+               End If
+               
+               ' Get the average based on the wind speed direction
+               curr_wind_dir_rad = degToRad(curr_wind_dir)
+               u_comp_vel = -1 * curr_wind_speed * Sin(curr_wind_dir_rad)
+               v_comp_vel = -1 * curr_wind_speed * Cos(curr_wind_dir_rad)
+               u_sum = u_sum + u_comp_vel
+               v_sum = v_sum + v_comp_vel
+               
+               ' Will soon be deprecated
+               wind_speed_sum = wind_speed_sum + curr_wind_speed
+               
+               ' Currently broken
+               hour_increment = hour_increment + hours_diff
+           Else
+               
+               ' Get the correct datetime for the intervals
+               ' Previous datetime has been used since the current datetime where the cursor is at, is actually ahead
+               ' in the next hour
+               Dim interval_datetime As Date: interval_datetime = generateNewDatetime(getOnlyDate(prev_date_val), hour(prev_date_val))
+               
+               If wind_speed_sum > 0 And data_count <> 0 Then
+                   ' Determine the average of the wind speed during those intervals
+                   ' Dim wind_speed_average As Double: wind_speed_average = wind_speed_sum / data_count
+                   Dim u_avg As Double: u_avg = u_sum / data_count
+                   Dim v_avg As Double: v_avg = v_sum / data_count
+                   Dim wind_comp As Double: wind_comp = Sqr(u_avg ^ 2 + v_avg ^ 2)
+                   Dim wind_dir_deg As Double: wind_dir_deg = radToDeg(Application.WorksheetFunction.Atan2(v_avg, u_avg)) + 180
+                   wind_speed_dict.Add interval_datetime, Array(wind_comp, u_avg, v_avg)
+                   Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
+                   Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = wind_comp
+                   Range(windSpeedDirWriteCol & wind_speed_dict.Count + 1) = wind_dir_deg
+                   
+               Else
+                   'Handles data where the cells keep returning non-numeric values (e.g. NaN)
+                   wind_speed_dict.Add interval_datetime, "NaN"
+                   Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
+                   Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                   Range(windSpeedDirWriteCol & wind_speed_dict.Count + 1) = "NaN"
+               End If
+               
+                Dim interval_diff As Double
+                Dim dateIncrement As String
+                
+                ' I call this the magic number because it works, and Im too lazy to think about why this works
+                Dim magic_number As Double
+                
+                Select Case type_selection
+                    Case "Hourly"
+                        interval_diff = hours_diff
+                        dateIncrement = "h" ' Increment by hour
+                        magic_number = 1
+                        
+                    Case "Daily"
+                        interval_diff = days_diff ' You need to calculate days_diff similar to how you calculate hours_diff
+                        dateIncrement = "d" ' Increment by day
+                        magic_number = 1
+                        
+                    Case Else
+                        Debug.Print "Error in choosing the type selection, setting hourly as default"
+                        interval_diff = hours_diff
+                        dateIncrement = "h"
+                        magic_number = 1
+                End Select
+               
+               ' This fills in gaps where there are missing intervals
+               ' For now, it is hardcoded to fill in hourly gap
+               Do While Round(interval_diff, 0) > magic_number
+                   ' Increment CurrentDate by 1 hour
+                   prev_date_val = DateAdd(dateIncrement, 1, prev_date_val)
+                   ' Print each hour in 24-hour format
+                   Debug.Print "Data missing for " & Format(prev_date_val, "dd/mm/yyyy HH:mm:ss")
+                   interval_datetime = generateNewDatetime(getOnlyDate(prev_date_val), hour(prev_date_val))
+                   
+                   wind_speed_dict.Add interval_datetime, "NaN"
+                   Range(dateWriteCol & wind_speed_dict.Count + 1) = interval_datetime
+                   Range(windSpeedAverageWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                   Range(windSpeedDirWriteCol & wind_speed_dict.Count + 1) = "NaN"
+                   interval_diff = interval_diff - 1
+               Loop
+               
+
+               
+               If IsNumeric(windSpeedValues(i, 1)) Then
+                   curr_wind_speed = windSpeedValues(i, 1)
+                   curr_wind_dir = windSpeedDirValues(i, 1)
+                   curr_wind_dir_rad = degToRad(curr_wind_dir)
+                   u_comp_vel = -1 * curr_wind_speed * Sin(curr_wind_dir_rad)
+                   v_comp_vel = -1 * curr_wind_speed * Cos(curr_wind_dir_rad)
+                   u_sum = u_comp_vel
+                   v_sum = v_comp_vel
+                   wind_speed_sum = curr_wind_speed
+                   data_count = 1
+               Else
+                   wind_speed_sum = 0
+                   u_sum = 0
+                   v_sum = 0
+                   data_count = 0
+               End If
+               
+               hour_increment = 0
+
+           End If
             
             prev_date_val = date_val
         End If
@@ -232,6 +272,10 @@ End Function
 
 Function hoursDifference(StartDate As Date, EndDate As Date) As Double
     hoursDifference = (EndDate - StartDate) * 24
+End Function
+
+Function daysDifference(StartDate As Date, EndDate As Date) As Double
+    daysDifference = (EndDate - StartDate)
 End Function
 
 Private Function colLetterToNumber(col_letter As String) As Double
