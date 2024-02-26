@@ -1,8 +1,8 @@
 Attribute VB_Name = "getNoiseMatrix"
-Function getNoiseMatrixFunction(ByRef wind_turbine_data_range As Range, ByRef new_wind_turbine_data_range As Range, ByRef property_data_range As Range, _
-                                ByRef write_matrix_range As Range, ByRef curr_sound_level As Double, ByRef new_sound_level As Double)
+Function getNoiseMatrixFunction(ByRef wind_turbine_data_range As Range, ByRef property_data_range As Range, _
+                                ByRef write_matrix_range As Range)
                                 
-    Debug.Print wind_turbine_data_range.address, new_wind_turbine_data_range.address, property_data_range.address, write_matrix_range.address, curr_sound_level, new_sound_level
+    Debug.Print wind_turbine_data_range.address, property_data_range.address, write_matrix_range.address
     
     ' Assert the first row of the box is the labels
     Dim header As Range
@@ -17,25 +17,16 @@ Function getNoiseMatrixFunction(ByRef wind_turbine_data_range As Range, ByRef ne
     ' I don't understand how tf I cannot change the function name without breaking it, so Im leaving the name as it is
     ' although GetTurbineData is a generic function that parses "object", "x", "y" data
     Dim wind_turbine_dict As Scripting.Dictionary: Set wind_turbine_dict = GetTurbineData(wind_turbine_data_range)
-    Dim new_wind_turbine_dict As Scripting.Dictionary: Set new_wind_turbine_dict = GetTurbineData(new_wind_turbine_data_range)
     Dim property_dict As Scripting.Dictionary: Set property_dict = GetTurbineData(property_data_range)
     
     ' Example of how to use the turbinesData
     Dim k As Variant
     Dim n As Variant
     For Each k In wind_turbine_dict.keys
-        Debug.Print "Turbine: " & k & ", Coordinates: (" & wind_turbine_dict(k)(0) & ", " & wind_turbine_dict(k)(1) & ")"
+        Debug.Print "Turbine: " & k & ", Coordinates: (" & wind_turbine_dict(k)(0) & ", " & wind_turbine_dict(k)(1) & ", " & wind_turbine_dict(k)(2) & ")"
         
         For Each n In property_dict.keys
-            Debug.Print "Property: " & n & ", Coordinates: (" & property_dict(n)(0) & ", " & property_dict(n)(1) & ")"
-        Next n
-    Next k
-    
-    For Each k In new_wind_turbine_dict.keys
-        Debug.Print "Turbine: " & k & ", Coordinates: (" & new_wind_turbine_dict(k)(0) & ", " & new_wind_turbine_dict(k)(1) & ")"
-        
-        For Each n In property_dict.keys
-            Debug.Print "Property: " & n & ", Coordinates: (" & property_dict(n)(0) & ", " & property_dict(n)(1) & ")"
+            Debug.Print "Property: " & n & ", Coordinates: (" & property_dict(n)(0) & ", " & property_dict(n)(1) & ", " & property_dict(n)(2) & ")"
         Next n
     Next k
     
@@ -119,13 +110,15 @@ Function GetTurbineData(rng As Range) As Scripting.Dictionary
     Dim key As String
     Dim x As Long
     Dim y As Long
+    Dim noise_lvl As Double
     
     ' Loop through each row in the range, skipping the header
     For Each cell In rng.Offset(1, 0).Resize(rng.Rows.Count - 1, 1).Cells
         key = cell.value ' Turbine name
         x = cell.Offset(0, 1).value ' X coordinate
         y = cell.Offset(0, 2).value ' Y coordinate
-        dict(key) = Array(x, y) ' Add to dictionary as an array (which is like a tuple)
+        noise_lvl = cell.Offset(0, 3) ' Noise Level
+        dict(key) = Array(x, y, noise_lvl) ' Add to dictionary as an array (which is like a tuple)
     Next cell
     
     Set GetTurbineData = dict
