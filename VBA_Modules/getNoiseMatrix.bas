@@ -1,12 +1,12 @@
 Attribute VB_Name = "getNoiseMatrix"
-Function getNoiseMatrixFunction(ByRef wind_turbine_data_range As Range, ByRef property_data_range As Range, _
-                                ByRef write_matrix_range As Range, ByRef alpha_val As Double)
+Function getNoiseMatrixFunction(ByRef col_data_range As Range, ByRef row_data_range As Range, _
+                                ByRef write_matrix_range As Range, transpose_flag As Boolean)
                                 
-    Debug.Print wind_turbine_data_range.address, property_data_range.address, write_matrix_range.address, alpha_val
+    Debug.Print col_data_range.address, row_data_range.address, write_matrix_range.address, transpose_flag
     
     ' Assert the first row of the box is the labels
     Dim header As Range
-    Set header = wind_turbine_data_range.Rows(1)
+    Set header = col_data_range.Rows(1)
 
     ' Check if the first row contains labels (you could add more checks here)
     If IsEmpty(header.Cells(1, 1).value) Or IsEmpty(header.Cells(1, 2).value) Or IsEmpty(header.Cells(1, 3).value) Then
@@ -16,17 +16,24 @@ Function getNoiseMatrixFunction(ByRef wind_turbine_data_range As Range, ByRef pr
 
     ' I don't understand how tf I cannot change the function name without breaking it, so Im leaving the name as it is
     ' although GetTurbineData is a generic function that parses "object", "x", "y" data
-    Dim wind_turbine_dict As Scripting.Dictionary: Set wind_turbine_dict = GetTurbineData(wind_turbine_data_range)
-    Dim property_dict As Scripting.Dictionary: Set property_dict = GetTurbineData(property_data_range)
-    
+    Dim col_data_dict As Scripting.Dictionary
+    Dim row_data_dict As Scripting.Dictionary
+    If Not transpose_flag Then
+        Set col_data_dict = GetTurbineData(col_data_range)
+        Set row_data_dict = GetTurbineData(row_data_range)
+    Else
+        Set row_data_dict = GetTurbineData(col_data_range)
+        Set col_data_dict = GetTurbineData(row_data_range)
+    End If
+        
     ' Example of how to use the turbinesData
     Dim k As Variant
     Dim n As Variant
-    For Each k In wind_turbine_dict.keys
-        Debug.Print "Turbine: " & k & ", Coordinates: (" & wind_turbine_dict(k)(0) & ", " & wind_turbine_dict(k)(1) & ", " & wind_turbine_dict(k)(2) & ")"
+    For Each k In col_data_dict.keys
+        Debug.Print "Column Data: " & k & ", Coordinates: (" & col_data_dict(k)(0) & ", " & col_data_dict(k)(1) & ", " & col_data_dict(k)(2) & ")"
         
-        For Each n In property_dict.keys
-            Debug.Print "Property: " & n & ", Coordinates: (" & property_dict(n)(0) & ", " & property_dict(n)(1) & ", " & property_dict(n)(2) & ")"
+        For Each n In row_data_dict.keys
+            Debug.Print "Row Data: " & n & ", Coordinates: (" & row_data_dict(n)(0) & ", " & row_data_dict(n)(1) & ", " & row_data_dict(n)(2) & ")"
         Next n
     Next k
     
@@ -34,35 +41,47 @@ Function getNoiseMatrixFunction(ByRef wind_turbine_data_range As Range, ByRef pr
     
     ' Force the property names to be written at row 3 of the sheets
     Dim init_matrix_col_num As Long: init_matrix_col_num = colLetterToNumber(init_matrix_col)
-    Dim property_str_col As String: property_str_col = init_matrix_col
+    
+    Dim col_data_write_str_init As String
+    Dim row_data_write_str_init As String
+    Dim distance_val_str_col As String
+    Dim noise_val_str_col As String
+    
+    Dim row_count As Double
+    Dim col_count As Double
+    
+    row_data_write_str_init = init_matrix_col
     ' Force the wind_turbine names written at 2nd row of the sheets
-    Dim wind_turbine_str_col_init As String: wind_turbine_str_col_init = colNumberToLetter(init_matrix_col_num + 1)
-    Dim distance_val_str_col As String: distance_val_str_col = colNumberToLetter(init_matrix_col_num + 1) & 3
+    col_data_write_str_init = colNumberToLetter(init_matrix_col_num + 1)
+    row_count = row_data_dict.Count
+    col_count = col_data_dict.Count
     
-    ' Offset the noise calculation by the numbers of wind turbine
-    Dim noise_val_str_col As String: noise_val_str_col = colNumberToLetter(colLetterToNumber(distance_val_str_col) _
-                                                            + (wind_turbine_dict.Count + 1)) & 3
-    
+    distance_val_str_col = colNumberToLetter(init_matrix_col_num + 1) & 3
+
+    ' Offset the noise calculation by the numbers from row data (since it is transposed)
+    noise_val_str_col = colNumberToLetter(colLetterToNumber(distance_val_str_col) _
+                                                        + (col_count + 1)) & 3
     Dim i As Long
-    For i = 0 To property_dict.Count - 1
+    Dim col_data_write_str As String
+    For i = 0 To row_data_dict.Count - 1
         ' Force the property names to be written incrementally from the 3rd Row
-        Range(init_matrix_col & (3 + i)) = property_dict.keys()(i)
+        Range(init_matrix_col & (3 + i)) = row_data_dict.keys()(i)
     Next i
     
-    For i = 0 To wind_turbine_dict.Count - 1
+    For i = 0 To col_data_dict.Count - 1
         ' Since the wind turbine is written column to column, we have to incrementally increase the letter value
         ' but force it to be at 2nd row
-        Dim wind_turbine_str_col As String: wind_turbine_str_col = colNumberToLetter(colLetterToNumber(wind_turbine_str_col_init) + i)
-        Range(wind_turbine_str_col & 2) = wind_turbine_dict.keys()(i)
+        col_data_write_str = colNumberToLetter(colLetterToNumber(col_data_write_str_init) + i)
+        Range(col_data_write_str & 2) = col_data_dict.keys()(i)
     Next i
-    
-    Debug.Print property_str_col, wind_turbine_str_col, distance_val_str_col, ActiveSheet.Name
     
     ' Define the starting cell on the sheet
     Dim startCell As Range
     Set startCell = ThisWorkbook.Sheets(ActiveSheet.Name).Range(distance_val_str_col) ' Change to your actual sheet name and start cell
     Dim distance_matrix As Variant
-    distance_matrix = createDistanceMatrix(wind_turbine_dict, property_dict) ' Example: 10 rows, 5 columns
+    
+    distance_matrix = createDistanceMatrix(col_data_dict, row_data_dict, transpose_flag) ' Example: 10 rows, 5 columns
+        
     ' Write the matrix to the sheet
     WriteMatrixToSheet distance_matrix, startCell
 
@@ -72,7 +91,7 @@ Function getNoiseMatrixFunction(ByRef wind_turbine_data_range As Range, ByRef pr
     Set noiseStartCell = ThisWorkbook.Sheets(ActiveSheet.Name).Range(noise_val_str_col) ' Change to your actual sheet name and start cell
     Debug.Print noise_val_str_col
     Dim noise_matrix As Variant
-    noise_matrix = createNoiseMatrix(wind_turbine_dict, property_dict, alpha_val, distance_matrix)
+    noise_matrix = createNoiseMatrix(col_data_dict, row_data_dict, transpose_flag, distance_matrix)
     WriteMatrixToSheet noise_matrix, noiseStartCell
     
     MsgBox "Data parsing complete."
@@ -136,10 +155,11 @@ Function GetTurbineData(rng As Range) As Scripting.Dictionary
 End Function
 
 ' Generate Matrix for Distance
-Function createDistanceMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.Dictionary)
+Function createDistanceMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.Dictionary, transpose As Boolean)
+
     col_count = dict_1.Count
     row_count = dict_2.Count
-    
+
     Dim matrix() As Double
     ReDim matrix(1 To row_count, 1 To col_count) As Double
     x = 1
@@ -162,14 +182,13 @@ Function createDistanceMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scriptin
 End Function
 
 ' Generate Matrix for Distance
-Function createNoiseMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.Dictionary, alpha_val As Double, ParamArray distance_matrix() As Variant)
+Function createNoiseMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.Dictionary, transpose As Boolean, ParamArray distance_matrix() As Variant)
 
     col_count = dict_1.Count
     row_count = dict_2.Count
     
     Dim matrix() As Double
     ReDim matrix(1 To row_count, 1 To col_count) As Double
-    x = 1
     
     ' VBA Matrix index starts with 1 so matrix(0, 0) does not exist!
     For curr_row = 1 To row_count
@@ -179,15 +198,29 @@ Function createNoiseMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.D
             Dim j As Long: j = curr_col - 1
             
             ' Writing it this way to make the code more readable
+
             Dim dict1_array As Variant: dict1_array = dict_1.Items()(j)
             Dim dict2_array As Variant: dict2_array = dict_2.Items()(i)
+
             
             ' The only issue with this implementation is that if the user decides to flip wind turbine and property,
             ' The noise calculation would then be wrong since we have force to use dict1_array's noise value
             ' Remember that the dictionary format is
             ' Name, x, y, noise
             Dim R As Double: R = distance_matrix(0)(curr_row, curr_col)
-            matrix(curr_row, curr_col) = dict1_array(2) - 10 * Application.WorksheetFunction.Log10(2 * 3.14159 * R ^ 2) - dict1_array(3) * R
+            
+            ' Ensures the the correct value is chosen for transposing
+            Dim Lw As Double
+            Dim alpha As Double
+            If Not transpose Then
+                Lw = dict1_array(2)
+                alpha = dict1_array(3)
+            Else
+                Lw = dict2_array(2)
+                alpha = dict2_array(3)
+            End If
+            
+            matrix(curr_row, curr_col) = Lw - 10 * Application.WorksheetFunction.Log10(2 * 3.14159 * R ^ 2) - alpha * R
         Next curr_col
     Next curr_row
     
