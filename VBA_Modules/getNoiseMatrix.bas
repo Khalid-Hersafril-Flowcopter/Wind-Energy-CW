@@ -1,8 +1,8 @@
 Attribute VB_Name = "getNoiseMatrix"
 Function getNoiseMatrixFunction(ByRef wind_turbine_data_range As Range, ByRef property_data_range As Range, _
-                                ByRef write_matrix_range As Range)
+                                ByRef write_matrix_range As Range, ByRef alpha_val As Double)
                                 
-    Debug.Print wind_turbine_data_range.address, property_data_range.address, write_matrix_range.address
+    Debug.Print wind_turbine_data_range.address, property_data_range.address, write_matrix_range.address, alpha_val
     
     ' Assert the first row of the box is the labels
     Dim header As Range
@@ -39,6 +39,10 @@ Function getNoiseMatrixFunction(ByRef wind_turbine_data_range As Range, ByRef pr
     Dim wind_turbine_str_col_init As String: wind_turbine_str_col_init = colNumberToLetter(init_matrix_col_num + 1)
     Dim distance_val_str_col As String: distance_val_str_col = colNumberToLetter(init_matrix_col_num + 1) & 3
     
+    ' Offset the noise calculation by the numbers of wind turbine
+    Dim noise_val_str_col As String: noise_val_str_col = colNumberToLetter(colLetterToNumber(distance_val_str_col) _
+                                                            + (wind_turbine_dict.Count + 1)) & 3
+    
     Dim i As Long
     For i = 0 To property_dict.Count - 1
         ' Force the property names to be written incrementally from the 3rd Row
@@ -54,17 +58,23 @@ Function getNoiseMatrixFunction(ByRef wind_turbine_data_range As Range, ByRef pr
     
     Debug.Print property_str_col, wind_turbine_str_col, distance_val_str_col, ActiveSheet.Name
     
-    
-    Dim myMatrix As Variant
-    myMatrix = createDistanceMatrix(wind_turbine_dict, property_dict) ' Example: 10 rows, 5 columns
-
     ' Define the starting cell on the sheet
     Dim startCell As Range
     Set startCell = ThisWorkbook.Sheets(ActiveSheet.Name).Range(distance_val_str_col) ' Change to your actual sheet name and start cell
-
+    Dim distance_matrix As Variant
+    distance_matrix = createDistanceMatrix(wind_turbine_dict, property_dict) ' Example: 10 rows, 5 columns
     ' Write the matrix to the sheet
-    WriteMatrixToSheet myMatrix, startCell
+    WriteMatrixToSheet distance_matrix, startCell
 
+
+    ' Define the starting cell on the sheet
+    Dim noiseStartCell As Range
+    Set noiseStartCell = ThisWorkbook.Sheets(ActiveSheet.Name).Range(noise_val_str_col) ' Change to your actual sheet name and start cell
+    Debug.Print noise_val_str_col
+    Dim noise_matrix As Variant
+    noise_matrix = createNoiseMatrix(wind_turbine_dict, property_dict, alpha_val, distance_matrix)
+    WriteMatrixToSheet noise_matrix, noiseStartCell
+    
     MsgBox "Data parsing complete."
     
 End Function
@@ -118,7 +128,8 @@ Function GetTurbineData(rng As Range) As Scripting.Dictionary
         x = cell.Offset(0, 1).value ' X coordinate
         y = cell.Offset(0, 2).value ' Y coordinate
         noise_lvl = cell.Offset(0, 3) ' Noise Level
-        dict(key) = Array(x, y, noise_lvl) ' Add to dictionary as an array (which is like a tuple)
+        alpha = cell.Offset(0, 4)
+        dict(key) = Array(x, y, noise_lvl, alpha) ' Add to dictionary as an array (which is like a tuple)
     Next cell
     
     Set GetTurbineData = dict
@@ -148,6 +159,39 @@ Function createDistanceMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scriptin
     Next curr_row
     
     createDistanceMatrix = matrix
+End Function
+
+' Generate Matrix for Distance
+Function createNoiseMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.Dictionary, alpha_val As Double, ParamArray distance_matrix() As Variant)
+
+    col_count = dict_1.Count
+    row_count = dict_2.Count
+    
+    Dim matrix() As Double
+    ReDim matrix(1 To row_count, 1 To col_count) As Double
+    x = 1
+    
+    ' VBA Matrix index starts with 1 so matrix(0, 0) does not exist!
+    For curr_row = 1 To row_count
+       For curr_col = 1 To col_count
+            ' This is required since VBA Dictionary index starts at 0 which is kind of stupid and unintuitive
+            Dim i As Long: i = curr_row - 1
+            Dim j As Long: j = curr_col - 1
+            
+            ' Writing it this way to make the code more readable
+            Dim dict1_array As Variant: dict1_array = dict_1.Items()(j)
+            Dim dict2_array As Variant: dict2_array = dict_2.Items()(i)
+            
+            ' The only issue with this implementation is that if the user decides to flip wind turbine and property,
+            ' The noise calculation would then be wrong since we have force to use dict1_array's noise value
+            ' Remember that the dictionary format is
+            ' Name, x, y, noise
+            Dim R As Double: R = distance_matrix(0)(curr_row, curr_col)
+            matrix(curr_row, curr_col) = dict1_array(2) - 10 * Application.WorksheetFunction.Log10(2 * 3.14159 * R ^ 2) - dict1_array(3) * R
+        Next curr_col
+    Next curr_row
+    
+    createNoiseMatrix = matrix
 End Function
 
 Function WriteMatrixToSheet(matrix As Variant, startCell As Range)
