@@ -1,6 +1,7 @@
 Attribute VB_Name = "getNoiseMatrix"
 Function getNoiseMatrixFunction(ByRef col_data_range As Range, ByRef row_data_range As Range, _
-                                ByRef write_matrix_range As Range, transpose_flag As Boolean)
+                                ByRef write_matrix_range As Range, transpose_flag As Boolean, _
+                                ByRef row_offset As Long)
                                 
     Debug.Print col_data_range.address, row_data_range.address, write_matrix_range.address, transpose_flag
     
@@ -56,23 +57,24 @@ Function getNoiseMatrixFunction(ByRef col_data_range As Range, ByRef row_data_ra
     row_count = row_data_dict.Count
     col_count = col_data_dict.Count
     
-    distance_val_str_col = colNumberToLetter(init_matrix_col_num + 1) & 3
+    ' This is useful if user wants to write their sound analysis on the same column but with an offset of a certain row length
+    distance_val_str_col = colNumberToLetter(init_matrix_col_num + 1) & (3 + row_offset)
 
     ' Offset the noise calculation by the numbers from row data (since it is transposed)
     noise_val_str_col = colNumberToLetter(colLetterToNumber(distance_val_str_col) _
-                                                        + (col_count + 1)) & 3
+                                                        + (col_count + 1)) & (3 + row_offset)
     Dim i As Long
     Dim col_data_write_str As String
     For i = 0 To row_data_dict.Count - 1
         ' Force the property names to be written incrementally from the 3rd Row
-        Range(init_matrix_col & (3 + i)) = row_data_dict.keys()(i)
+        Range(init_matrix_col & ((3 + row_offset) + i)) = row_data_dict.keys()(i)
     Next i
     
     For i = 0 To col_data_dict.Count - 1
         ' Since the wind turbine is written column to column, we have to incrementally increase the letter value
         ' but force it to be at 2nd row
         col_data_write_str = colNumberToLetter(colLetterToNumber(col_data_write_str_init) + i)
-        Range(col_data_write_str & 2) = col_data_dict.keys()(i)
+        Range(col_data_write_str & (2 + row_offset)) = col_data_dict.keys()(i)
     Next i
     
     ' Define the starting cell on the sheet
