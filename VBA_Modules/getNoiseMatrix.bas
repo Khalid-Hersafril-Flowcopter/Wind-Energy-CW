@@ -14,13 +14,21 @@ Function getNoiseMatrixFunction(ByRef wind_turbine_data_range As Range, ByRef pr
         Exit Function
     End If
 
-    Dim turbinesData As Scripting.Dictionary
-    Set turbinesData = GetTurbineData(wind_turbine_data_range)
+    ' I don't understand how tf I cannot change the function name without breaking it, so Im leaving the name as it is
+    ' although GetTurbineData is a generic function that parses "object", "x", "y" data
+    Dim wind_turbine_dict As Scripting.Dictionary: Set wind_turbine_dict = GetTurbineData(wind_turbine_data_range)
+    Dim property_dict As Scripting.Dictionary: Set property_dict = GetTurbineData(property_data_range)
     
     ' Example of how to use the turbinesData
     Dim k As Variant
-    For Each k In turbinesData.keys
-        Debug.Print "Turbine: " & k & ", Coordinates: (" & turbinesData(k)(0) & ", " & turbinesData(k)(1) & ")"
+    Dim n As Variant
+    For Each k In wind_turbine_dict.keys
+        Debug.Print "Turbine: " & k & ", Coordinates: (" & wind_turbine_dict(k)(0) & ", " & wind_turbine_dict(k)(1) & ")"
+        
+        For Each n In property_dict.keys
+            Debug.Print "Property: " & n & ", Coordinates: (" & property_dict(n)(0) & ", " & property_dict(n)(1) & ")"
+        Next n
+        
     Next k
 
     MsgBox "Data parsing complete."
