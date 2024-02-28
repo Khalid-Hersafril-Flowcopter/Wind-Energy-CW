@@ -21,22 +21,22 @@ Function getNoiseMatrixFunction(ByRef col_data_range As Range, ByRef row_data_ra
     Dim row_data_dict As Scripting.Dictionary
     If Not transpose_flag Then
         Set col_data_dict = GetTurbineData(col_data_range)
-        Set row_data_dict = GetTurbineData(row_data_range)
+        Set row_data_dict = GetPropertyData(row_data_range)
     Else
         Set row_data_dict = GetTurbineData(col_data_range)
-        Set col_data_dict = GetTurbineData(row_data_range)
+        Set col_data_dict = GetPropertyData(row_data_range)
     End If
         
-    ' Example of how to use the turbinesData
-    Dim k As Variant
-    Dim n As Variant
-    For Each k In col_data_dict.keys
-        Debug.Print "Column Data: " & k & ", Coordinates: (" & col_data_dict(k)(0) & ", " & col_data_dict(k)(1) & ", " & col_data_dict(k)(2) & ")"
-        
-        For Each n In row_data_dict.keys
-            Debug.Print "Row Data: " & n & ", Coordinates: (" & row_data_dict(n)(0) & ", " & row_data_dict(n)(1) & ", " & row_data_dict(n)(2) & ")"
-        Next n
-    Next k
+'    ' Example of how to use the turbinesData
+'    Dim k As Variant
+'    Dim n As Variant
+'    For Each k In col_data_dict.keys
+'        Debug.Print "Column Data: " & k & ", Coordinates: (" & col_data_dict(k)(0) & ", " & col_data_dict(k)(1) & ", " & col_data_dict(k)(2) & ")"
+'
+'        For Each n In row_data_dict.keys
+'            Debug.Print "Row Data: " & n & ", Coordinates: (" & row_data_dict(n)(0) & ", " & row_data_dict(n)(1) & ", " & row_data_dict(n)(2) & ")"
+'        Next n
+'    Next k
     
     Dim init_matrix_col As String: init_matrix_col = getColumnLetter(write_matrix_range.address)
     
@@ -75,6 +75,10 @@ Function getNoiseMatrixFunction(ByRef col_data_range As Range, ByRef row_data_ra
         ' but force it to be at 2nd row
         col_data_write_str = colNumberToLetter(colLetterToNumber(col_data_write_str_init) + i)
         Range(col_data_write_str & (2 + row_offset)) = col_data_dict.keys()(i)
+        
+        ' This is for the noise matrix column
+        col_data_write_str2 = colNumberToLetter(colLetterToNumber(noise_val_str_col) + i)
+        Range(col_data_write_str2 & (2 + row_offset)) = col_data_dict.keys()(i)
     Next i
     
     ' Define the starting cell on the sheet
@@ -154,6 +158,25 @@ Function GetTurbineData(rng As Range) As Scripting.Dictionary
     Next cell
     
     Set GetTurbineData = dict
+End Function
+
+Function GetPropertyData(rng As Range) As Scripting.Dictionary
+    Dim dict As New Scripting.Dictionary
+    Dim cell As Range
+    Dim key As String
+    Dim x As Long
+    Dim y As Long
+    Dim noise_lvl As Double
+    
+    ' Loop through each row in the range, skipping the header
+    For Each cell In rng.Offset(1, 0).Resize(rng.Rows.Count - 1, 1).Cells
+        key = cell.value ' Turbine name
+        x = cell.Offset(0, 1).value ' X coordinate
+        y = cell.Offset(0, 2).value ' Y coordinate
+        dict(key) = Array(x, y) ' Add to dictionary as an array (which is like a tuple)
+    Next cell
+    
+    Set GetPropertyData = dict
 End Function
 
 ' Generate Matrix for Distance
