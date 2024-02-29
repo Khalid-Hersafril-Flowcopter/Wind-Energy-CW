@@ -41,10 +41,10 @@ Function wakeLossAnalysis(ByRef wind_turbine_data As Range, ByRef data_write_ran
     distance_val_str_col = colNumberToLetter(init_matrix_col_num + 1) & (3 + row_offset)
     
     ' Write this below the distance matrix
-    direction_val_str_col = colNumberToLetter(init_matrix_col_num + 1) & (3 + data_count + row_offset)
+    direction_val_str_col = colNumberToLetter(init_matrix_col_num + 1) & (4 + (data_count + 1) + row_offset)
     
     ' Write this below the direction matrix (there will be n * data count rows above)
-    vel_factor_val_str_col = colNumberToLetter(init_matrix_col_num + 1) & (3 + 2 * data_count + row_offset)
+    vel_factor_val_str_col = colNumberToLetter(init_matrix_col_num + 1) & (4 + (2 * data_count + 3) + row_offset)
 
     Dim i As Long
     
@@ -70,15 +70,25 @@ Function wakeLossAnalysis(ByRef wind_turbine_data As Range, ByRef data_write_ran
         Range(col_data_write_str & (3 + (2 * data_count + 3) + row_offset)) = wind_data_dict.keys()(i)
     Next i
     
-'    ' Define the starting cell on the sheet
-'    Dim startCell As Range
-'    Set startCell = ThisWorkbook.Sheets(ActiveSheet.Name).Range(downtime_val_str_col) ' Change to your actual sheet name and start cell
-'    Dim downtime_matrix As Variant
-'
-'    downtime_matrix = createDowntimeMatrix(col_data_dict, row_data_dict, avg_sunlight, correction_factor, transpose_flag) ' Example: 10 rows, 5 columns
-'
-'    ' Write the matrix to the sheet
-'    WriteMatrixToSheet downtime_matrix, startCell
+    ' Define the starting cell on the sheet
+    Dim startCell As Range
+    Set startCell = ThisWorkbook.Sheets(ActiveSheet.Name).Range(distance_val_str_col) ' Change to your actual sheet name and start cell
+    Dim distance_matrix As Variant: distance_matrix = createDistanceMatrix(wind_data_dict, wind_data_dict)
+
+    ' Write the matrix to the sheet
+    WriteMatrixToSheet distance_matrix, startCell
+    
+    Set startCell = ThisWorkbook.Sheets(ActiveSheet.Name).Range(direction_val_str_col) ' Change to your actual sheet name and start cell
+    Dim direction_matrix As Variant: direction_matrix = createDirectionMatrix(wind_data_dict, wind_data_dict)
+
+    ' Write the matrix to the sheet
+    WriteMatrixToSheet direction_matrix, startCell
+    
+    Set startCell = ThisWorkbook.Sheets(ActiveSheet.Name).Range(vel_factor_val_str_col) ' Change to your actual sheet name and start cell
+    Dim vel_factor_matrix As Variant: vel_factor_matrix = createVelFactorMatrix(wind_data_dict, wind_data_dict, distance_matrix)
+
+    ' Write the matrix to the sheet
+    WriteMatrixToSheet vel_factor_matrix, startCell
     
 End Function
 
@@ -99,7 +109,7 @@ Private Function colNumberToLetter(col_number As Double) As String
     colNumberToLetter = Split(Cells(, col_number).address, "$")(1)
 End Function
 
-Function splitAddress(address As String) As Variant
+Private Function splitAddress(address As String) As Variant
     Dim i As Integer
     Dim letterPart As String
     Dim numberPart As Integer
@@ -117,7 +127,7 @@ Function splitAddress(address As String) As Variant
     splitAddress = Array(letterPart, numberPart)
 End Function
 
-Function GetTurbineData(rng As Range) As Scripting.Dictionary
+Private Function GetTurbineData(rng As Range) As Scripting.Dictionary
     Dim dict As New Scripting.Dictionary
     Dim cell As Range
     Dim key As String
@@ -130,36 +140,15 @@ Function GetTurbineData(rng As Range) As Scripting.Dictionary
         key = cell.Value ' Turbine name
         x = cell.Offset(0, 1).Value ' X coordinate
         y = cell.Offset(0, 2).Value ' Y coordinate
-        hub_height = cell.Offset(0, 3).Value
-        tip_height = cell.Offset(0, 4).Value
-        dict(key) = Array(x, y, hub_height, tip_height) ' Add to dictionary as an array (which is like a tuple)
+        setback_distance = cell.Offset(0, 3).Value
+        dict(key) = Array(x, y, setback_distance) ' Add to dictionary as an array (which is like a tuple)
     Next cell
     
     Set GetTurbineData = dict
 End Function
 
-Function GetPropertyData(rng As Range) As Scripting.Dictionary
-    Dim dict As New Scripting.Dictionary
-    Dim cell As Range
-    Dim key As String
-    Dim x As Long
-    Dim y As Long
-    Dim noise_lvl As Double
-    
-    ' Loop through each row in the range, skipping the header
-    For Each cell In rng.Offset(1, 0).Resize(rng.Rows.count - 1, 1).Cells
-        key = cell.Value ' Turbine name
-        x = cell.Offset(0, 1).Value ' X coordinate
-        y = cell.Offset(0, 2).Value ' Y coordinate
-        dict(key) = Array(x, y) ' Add to dictionary as an array (which is like a tuple)
-    Next cell
-    
-    Set GetPropertyData = dict
-End Function
-
 ' Generate Matrix for Distance
-Function createDowntimeMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.Dictionary, avg_sunlight As Double, _
-                                correction_factor As Double, transpose As Boolean)
+Private Function createDistanceMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.Dictionary)
 
     col_count = dict_1.count
     row_count = dict_2.count
@@ -178,51 +167,15 @@ Function createDowntimeMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scriptin
             ' Writing it this way to make the code more readable
             Dim dict1_pos As Variant: dict1_pos = dict_1.Items()(j)
             Dim dict2_pos As Variant: dict2_pos = dict_2.Items()(i)
-            
-            Dim n As Double: n = correction_factor * (179 / (avg_sunlight * 60))
-            Dim count As Long: count = (270 - 91) / n
-            
-            Dim k As Long
-            Dim min_count As Double: min_count = 0
-            For k = 0 To count
-                Dim sun_angle As Double: sun_angle = 91 + (k * n)
-                Dim distance As Double: distance = Sqr((dict1_pos(0) - dict2_pos(0)) ^ 2 + (dict1_pos(1) - dict2_pos(1)) ^ 2)
-                
-                Dim sun_direction As String
-                Dim property_dir As String
-                Dim property_angle_deg As Double: property_angle_deg = radToDeg(Application.WorksheetFunction.Atan2(( _
-                                            dict1_pos(1) - dict2_pos(0)), (dict1_pos(1) - dict2_pos(1))))
-                                            
-                If property_angle_deg < 180 Then
-                    property_dir = "W"
-                Else
-                    property_dir = "E"
-                End If
-                
-                If sun_angle > 90 And sun_angle < 180 Then
-                    sun_direction = "E"
-                Else
-                    sun_direction = "W"
-                End If
-                
-                Dim tip_shadow As Double: tip_shadow = Abs(dict1_pos(3) / Tan(degToRad(sun_angle - 90)))
-                Dim hub_shadow As Double: hub_shadow = Abs(dict1_pos(2) / Tan(degToRad(sun_angle - 90)))
-                
-                If Not StrComp(property_dir, sun_direction) And (distance > hub_shadow) And (distance < tip_shadow) Then
-                    min_count = min_count + 1
-                End If
-                
-            Next k
-                
-            matrix(curr_row, curr_col) = min_count / 60
+            matrix(curr_row, curr_col) = Sqr((dict1_pos(0) - dict2_pos(0)) ^ 2 + (dict1_pos(1) - dict2_pos(1)) ^ 2)
         Next curr_col
     Next curr_row
     
-    createDowntimeMatrix = matrix
+    createDistanceMatrix = matrix
 End Function
 
 ' Generate Matrix for Distance
-Function createShadowMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.Dictionary, transpose As Boolean)
+Private Function createDirectionMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.Dictionary)
 
     col_count = dict_1.count
     row_count = dict_2.count
@@ -242,10 +195,21 @@ Function createShadowMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.
             Dim dict1_pos As Variant: dict1_pos = dict_1.Items()(j)
             Dim dict2_pos As Variant: dict2_pos = dict_2.Items()(i)
             
-            Dim angle_rad As Double: angle_rad = Application.WorksheetFunction.Atan2((dict1_pos(1) - dict2_pos(1)), (dict1_pos(0) - dict2_pos(0)))
-            Dim angle_deg As Double: angle_deg = radToDeg(angle_rad)
+            Dim x_dist As Double: x_dist = dict1_pos(0) - dict2_pos(0)
+            Dim y_dist As Double: y_dist = dict1_pos(1) - dict2_pos(1)
             
-            If angle_deg < 0 Then
+            Dim angle_rad As Double
+            Dim angle_deg As Double
+            If Not (x_dist = 0 Or y_dist = 0) Then
+                angle_rad = Application.WorksheetFunction.Atan2(y_dist, x_dist)
+                angle_deg = radToDeg(angle_rad)
+            Else
+                angle_deg = 0
+            End If
+            
+            If angle_deg = 0 Then
+                angle_deg = 0
+            ElseIf angle_deg < 0 Then
                 angle_deg = (360 + angle_deg)
             End If
             
@@ -253,11 +217,49 @@ Function createShadowMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.
         Next curr_col
     Next curr_row
     
-    createShadowMatrix = matrix
+    createDirectionMatrix = matrix
     
 End Function
 
-Function WriteMatrixToSheet(matrix As Variant, startCell As Range)
+' Generate Matrix for Distance
+Function createVelFactorMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripting.Dictionary, ParamArray distance_matrix() As Variant)
+
+    col_count = dict_1.count
+    row_count = dict_2.count
+    
+    Dim matrix() As Double
+    ReDim matrix(1 To row_count, 1 To col_count) As Double
+    
+    ' VBA Matrix index starts with 1 so matrix(0, 0) does not exist!
+    For curr_row = 1 To row_count
+       For curr_col = 1 To col_count
+            ' This is required since VBA Dictionary index starts at 0 which is kind of stupid and unintuitive
+            Dim i As Long: i = curr_row - 1
+            Dim j As Long: j = curr_col - 1
+            
+            ' Writing it this way to make the code more readable
+
+            Dim dict1_array As Variant: dict1_array = dict_1.Items()(j)
+            Dim dict2_array As Variant: dict2_array = dict_2.Items()(i)
+
+            
+            ' The only issue with this implementation is that if the user decides to flip wind turbine and property,
+            ' The noise calculation would then be wrong since we have force to use dict1_array's noise value
+            ' Remember that the dictionary format is
+            ' Name, x, y, noise
+            Dim D As Double: D = distance_matrix(0)(curr_row, curr_col)
+            
+            Dim Ct As Double: Ct = 0.89
+            Dim k As Double: k = 0.075
+            Dim x As Double: x = dict1_array(2)
+            matrix(curr_row, curr_col) = 1 - (1 - Sqr(1 - Ct)) * (D / (D + 2 * k * x)) ^ 2
+        Next curr_col
+    Next curr_row
+    
+    createVelFactorMatrix = matrix
+End Function
+
+Private Function WriteMatrixToSheet(matrix As Variant, startCell As Range)
     ' Determine the size of the matrix
     Dim numRows As Long
     Dim numCols As Long
