@@ -131,8 +131,8 @@ Private Function GetTurbineData(rng As Range) As Scripting.Dictionary
     Dim dict As New Scripting.Dictionary
     Dim cell As Range
     Dim key As String
-    Dim x As Long
-    Dim y As Long
+    Dim x As Double
+    Dim y As Double
     Dim noise_lvl As Double
     
     ' Loop through each row in the range, skipping the header
@@ -140,8 +140,9 @@ Private Function GetTurbineData(rng As Range) As Scripting.Dictionary
         key = cell.Value ' Turbine name
         x = cell.Offset(0, 1).Value ' X coordinate
         y = cell.Offset(0, 2).Value ' Y coordinate
-        setback_distance = cell.Offset(0, 3).Value
-        dict(key) = Array(x, y, setback_distance) ' Add to dictionary as an array (which is like a tuple)
+        diameter = cell.Offset(0, 3) ' Diameter of turbine
+        setback_distance = cell.Offset(0, 4).Value ' Setback distance
+        dict(key) = Array(x, y, diameter, setback_distance) ' Add to dictionary as an array (which is like a tuple)
     Next cell
     
     Set GetTurbineData = dict
@@ -247,12 +248,19 @@ Function createVelFactorMatrix(dict_1 As Scripting.Dictionary, dict_2 As Scripti
             ' The noise calculation would then be wrong since we have force to use dict1_array's noise value
             ' Remember that the dictionary format is
             ' Name, x, y, noise
-            Dim D As Double: D = distance_matrix(0)(curr_row, curr_col)
+            Dim x As Double: x = distance_matrix(0)(curr_row, curr_col)
             
             Dim Ct As Double: Ct = 0.89
             Dim k As Double: k = 0.075
-            Dim x As Double: x = dict1_array(2)
-            matrix(curr_row, curr_col) = 1 - (1 - Sqr(1 - Ct)) * (D / (D + 2 * k * x)) ^ 2
+            Dim D As Double: D = dict1_array(2)
+            
+            If Not ((dict1_array(0) = dict2_array(0)) And (dict1_array(1) = dict2_array(1))) Then
+                matrix(curr_row, curr_col) = 1 - (1 - Sqr(1 - Ct)) * (D / (D + 2 * k * x)) ^ 2
+            Else
+                ' For turbines that is referencing itself, the velocity ratio should be 1
+                matrix(curr_row, curr_col) = 1
+            End If
+
         Next curr_col
     Next curr_row
     
