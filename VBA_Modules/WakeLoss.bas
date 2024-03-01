@@ -193,8 +193,8 @@ Private Function createDirectionMatrix(dict_1 As Scripting.Dictionary, dict_2 As
             Dim j As Long: j = curr_col - 1
             
             ' Writing it this way to make the code more readable
-            Dim dict1_pos As Variant: dict1_pos = dict_1.Items()(j)
-            Dim dict2_pos As Variant: dict2_pos = dict_2.Items()(i)
+            Dim dict1_pos As Variant: dict1_pos = dict_1.Items()(i)
+            Dim dict2_pos As Variant: dict2_pos = dict_2.Items()(j)
             
             Dim x_dist As Double: x_dist = dict1_pos(0) - dict2_pos(0)
             Dim y_dist As Double: y_dist = dict1_pos(1) - dict2_pos(1)
@@ -203,17 +203,11 @@ Private Function createDirectionMatrix(dict_1 As Scripting.Dictionary, dict_2 As
             Dim angle_deg As Double
             If Not (x_dist = 0 Or y_dist = 0) Then
                 angle_rad = Application.WorksheetFunction.Atan2(y_dist, x_dist)
-                angle_deg = radToDeg(angle_rad)
+                angle_deg = radToDeg(angle_rad) + 180
             Else
                 angle_deg = 0
             End If
-            
-            If angle_deg = 0 Then
-                angle_deg = 0
-            ElseIf angle_deg < 0 Then
-                angle_deg = (360 + angle_deg)
-            End If
-            
+
             matrix(curr_row, curr_col) = angle_deg
         Next curr_col
     Next curr_row
